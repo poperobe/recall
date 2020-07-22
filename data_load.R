@@ -4,6 +4,7 @@ library(MASS)
 library(tidyverse)
 library(jsonlite)
 library(httr)
+# hard code attributes from the metadata file
 txt_col<-c('RECORD_ID','CAMPNO','MAKETXT','MODELTXT',
            'YEARTXT','MFGCAMPNO','COMPNAME','MFGNAME',
            'BGMAN','ENDMAN','RCLTYPECD','POTAFF','ODATE',
@@ -31,23 +32,28 @@ col_desc<-c('RUNNING SEQUENCE NUMBER','NHTSA CAMPAIGN NUMBER',
             'MANUFACTURER-SUPPLIED COMPONENT PART NUMBER')
 names(col_desc)<-txt_col
 
+# hard code the makes we care about
 makes<-sort(c('BMW','MINI','MERCEDES','LEXUS','NISSAN','AUDI','VOLKSWAGEN','HYUNDAI',
               'INFINITI','KIA','MAZDA','LAND ROVER','VOLVO','HONDA','JAGUAR','ACURA',
               'TOYOTA','MOPAR','SUBARU','PORSCHE'))
 
-# Read in data. uncomment once out of development
+# Read in data. 
 temp <- tempfile()
 download.file("https://www-odi.nhtsa.dot.gov/downloads/folders/Recalls/FLAT_RCL.zip",temp)
 data <- read_delim(unz(temp, "FLAT_RCL.txt"),'\t',col_names = FALSE)
 unlink(temp)
-
+# data cleaning
 names(data)<-txt_col
 data$BGMAN<-as.Date(as.character(data$BGMAN),'%Y%m%d')
 data$RCDATE<-as.Date(as.character(data$RCDATE),'%Y%m%d')
+
+# create days_since, which will be the independent variable for this analysis
 data$days_since<-as.integer(data$RCDATE-data$BGMAN)
+# remove incomplete data
 tenyr<-data %>% filter(YEARTXT<=2010,MAKETXT %in% makes,
                        days_since>0,days_since<7300)
 
+# test two distributions
 ex<-tenyr$days_since
 ex<-ex[!is.na(ex)]
 ex<-ex[ex>0]
@@ -58,4 +64,7 @@ chisq.test(x=ex, p=dlnorm(ex,est1[[1]],est1[[2]]), rescale.p=TRUE)
 fit2<-fitdistr(ex,'geometric')
 est2<-fit2$estimate
 
+# both lognormal and geomtric distributions fit well
+# geometric looks better, so use it
+# save input files for app to use
 save(list=c("data","est2","col_desc","makes"),file = "input.RDA")
